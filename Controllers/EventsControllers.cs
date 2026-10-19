@@ -2,6 +2,7 @@
 using CampusEvents.Api.Data;
 using CampusEvents.Api.Models;
 using Microsoft.AspNetCore.Mvc;
+using CampusEvents.Api.DTOs;
 
 namespace CampusEvents.Api.Controllers;
 
@@ -9,19 +10,26 @@ namespace CampusEvents.Api.Controllers;
 [Route("api/events")]
 public class EventsController : ControllerBase
 {
+
+    private readonly AppDbContext _dbContext;
+
+    public EventsController(AppDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
     // GET: /api/events
     [HttpGet]
     public ActionResult<IEnumerable<CampusEvent>> GetEvents()
     {
-        return Ok(EventSeedData.Events);
+      var events = _dbContext.CampusEvents.ToList();
+        return Ok(events);
     }
 
     // GET: /api/events/2
     [HttpGet("{id:int}")]
     public ActionResult<CampusEvent> GetEventById(int id)
     {
-        var campusEvent = EventSeedData.Events
-            .FirstOrDefault(e => e.Id == id);
+        var campusEvent = _dbContext.CampusEvents.FirstOrDefault(e => e.Id == id);
 
         if (campusEvent is null)
         {
@@ -35,12 +43,20 @@ public class EventsController : ControllerBase
     }
 
 
+
     [HttpPost]
-public ActionResult<CampusEvent> CreateEvent(
-    [FromBody] CampusEvent newEvent)
+public ActionResult<CampusEvent> CreateEvent(EventCreateDTO eventCreateDTO)
 {
-    // Validate required fields
-    if (string.IsNullOrWhiteSpace(newEvent.Name))
+    var campusEvent = new CampusEvent
+    {
+        Name = eventCreateDTO.Name,
+        Date = eventCreateDTO.StartDate, // Assuming StartDate is used for the event date
+        Location = eventCreateDTO.Location,
+        OrganizerId = 1, // You can set this to a valid organizer ID
+        EventCategoryId = 1 // You can set this to a valid category ID
+    };
+{
+    if (string.IsNullOrWhiteSpace(campusEvent.Name))
     {
         return BadRequest(new
         {
@@ -48,7 +64,7 @@ public ActionResult<CampusEvent> CreateEvent(
         });
     }
 
-    if (string.IsNullOrWhiteSpace(newEvent.Location))
+    if (string.IsNullOrWhiteSpace(campusEvent.Location))
     {
         return BadRequest(new
         {
@@ -56,7 +72,7 @@ public ActionResult<CampusEvent> CreateEvent(
         });
     }
 
-    if (newEvent.Date == default)
+    if (campusEvent.Date == default)
     {
         return BadRequest(new
         {
@@ -64,27 +80,21 @@ public ActionResult<CampusEvent> CreateEvent(
         });
     }
 
-    // Generate the next ID
-    newEvent.Id = EventSeedData.Events.Count == 0
-        ? 1
-        : EventSeedData.Events.Max(e => e.Id) + 1;
+    _dbContext.CampusEvents.Add(campusEvent);
+    _dbContext.SaveChanges();
 
-    // Save the event in memory
-    EventSeedData.Events.Add(newEvent);
+    return CreatedAtAction(nameof(GetEventById), new { id = campusEvent.Id }, campusEvent);
 
-    // Return HTTP 201 Created
-    return CreatedAtAction(
-        nameof(GetEventById),
-        new { id = newEvent.Id },
-        newEvent);
+}
 }
 
 
+
 [HttpDelete("{id:int}")]
+
 public IActionResult DeleteEvent(int id)
 {
-    var campusEvent = EventSeedData.Events
-        .FirstOrDefault(e => e.Id == id);
+    var campusEvent = _dbContext.CampusEvents.FirstOrDefault(e => e.Id == id);
 
     if (campusEvent is null)
     {
@@ -94,7 +104,8 @@ public IActionResult DeleteEvent(int id)
         });
     }
 
-    EventSeedData.Events.Remove(campusEvent);
+    _dbContext.CampusEvents.Remove(campusEvent);
+    _dbContext.SaveChanges();
 
     return NoContent();
 }
@@ -105,12 +116,11 @@ public IActionResult DeleteEvent(int id)
 [HttpPut("{id:int}")]
 public ActionResult<CampusEvent> UpdateEvent(
     int id,
-    [FromBody] CampusEvent updatedEvent)
+    EventCreateDTO eventUpdateDTO)
 {
-    var existingEvent = EventSeedData.Events
-        .FirstOrDefault(e => e.Id == id);
+    var campusEvent = _dbContext.CampusEvents.FirstOrDefault(e => e.Id == id);
 
-    if (existingEvent is null)
+    if (campusEvent is null)
     {
         return NotFound(new
         {
@@ -118,40 +128,15 @@ public ActionResult<CampusEvent> UpdateEvent(
         });
     }
 
-    if (string.IsNullOrWhiteSpace(updatedEvent.Name))
-    {
-        return BadRequest(new
-        {
-            message = "Event name is required."
-        });
-    }
+    campusEvent.Name = eventUpdateDTO.Name;
+    campusEvent.Date = eventUpdateDTO.StartDate; // Assuming StartDate is used for the event date
+    campusEvent.Location = eventUpdateDTO.Location;
 
-    if (string.IsNullOrWhiteSpace(updatedEvent.Location))
-    {
-        return BadRequest(new
-        {
-            message = "Event location is required."
-        });
-    }
+    _dbContext.SaveChanges();
 
-    if (updatedEvent.Date == default)
-    {
-        return BadRequest(new
-        {
-            message = "Event date is required."
-        });
-    }
+    return Ok(campusEvent);
 
-    // Update the existing event
-    existingEvent.Name = updatedEvent.Name;
-    existingEvent.Date = updatedEvent.Date;
-    existingEvent.Location = updatedEvent.Location;
-    existingEvent.Description = updatedEvent.Description;
-    existingEvent.OrganizerId = updatedEvent.OrganizerId;
-    existingEvent.EventCategoryId = updatedEvent.EventCategoryId;
 
-    return Ok(existingEvent);
+
 }
-
-
 }
